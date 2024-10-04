@@ -1,27 +1,19 @@
 package ar.edu.utn.frc.tup.services.impl;
 
-import ar.edu.utn.frc.tup.DTO.AlumnDTO;
-import ar.edu.utn.frc.tup.DTO.NoteRecord;
-import ar.edu.utn.frc.tup.DTO.TeacherDTO;
+import ar.edu.utn.frc.tup.DTO.*;
 import ar.edu.utn.frc.tup.client.RestClient;
 import ar.edu.utn.frc.tup.entities.AlumnEntity;
 import ar.edu.utn.frc.tup.entities.SubjectEntity;
-import ar.edu.utn.frc.tup.entities.TeacherEntity;
 import ar.edu.utn.frc.tup.models.Alumn;
 import ar.edu.utn.frc.tup.models.Teacher;
 import ar.edu.utn.frc.tup.repositories.AlumnRepository;
 import ar.edu.utn.frc.tup.repositories.SubjectRepository;
 import ar.edu.utn.frc.tup.repositories.TeacherRepository;
 import ar.edu.utn.frc.tup.services.GestionService;
-import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import javax.security.auth.Subject;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -72,21 +64,23 @@ public class GestionServiceImpl implements GestionService {
 
     @Override
     public List<AlumnDTO> registrarBD() {
-        //1 Registrar alumnos y profesores
+        // 1. Registrar alumnos y profesores
         List<Alumn> alumnList = restClient.getAllAlumns();
         List<Teacher> teacherList = restClient.getAllTeachers();
 
-        //Iterar sobre cada alumno y registrar materia
-        for (Alumn alum : alumnList){
+        List<AlumnDTO> alumnDTOList = new ArrayList<>();
+
+        // 2. Iterar sobre cada alumno y registrar materias
+        for (Alumn alum : alumnList) {
             AlumnEntity alumnEntity = new AlumnEntity();
             alumnEntity.setNombre(alum.getNombre());
             alumnEntity.setLegajo(alum.getLegajo());
 
             List<SubjectEntity> subjectList = new ArrayList<>();
 
-            for (Teacher teacher : teacherList){
+            // 3. Iterar sobre cada profesor para registrar materias
+            for (Teacher teacher : teacherList) {
                 SubjectEntity subjectEntity = new SubjectEntity();
-
                 subjectEntity.setMateria(teacher.getMateria());
                 subjectEntity.setAlumnos(alumnEntity);
                 subjectEntity.setDocente(teacher.getNombre());
@@ -95,16 +89,32 @@ public class GestionServiceImpl implements GestionService {
                 subjectList.add(subjectEntity);
             }
 
+            // 4. Asociar las materias al alumno y guardar en la base de datos
             alumnEntity.setMaterias(subjectList);
             alumnRepository.save(alumnEntity);
+
+            // 5. Crear el DTO de respuesta para cada alumno
+            List<SubjectDTO> subjectDTOList = subjectList.stream().map(subject -> {
+                SubjectDTO subjectDTO = new SubjectDTO();
+                subjectDTO.setMateria(subject.getMateria());
+                subjectDTO.setDocente(subject.getDocente());
+                subjectDTO.setCalificacion(subject.getCalificacion());
+                subjectDTO.setEstado(subject.getEstado());
+                return subjectDTO;
+            }).collect(Collectors.toList());
+
+            // 6. Agregar el DTO del alumno a la lista
+            AlumnDTO alumnDTO = new AlumnDTO(alum.getLegajo(), alum.getNombre(), subjectDTOList);
+            alumnDTOList.add(alumnDTO);
         }
-        //4 mapear los alumnos a dto para la respuesta
-        return alumnList.stream().map(alumn -> new AlumnDTO(alumn.getLegajo(),alumn.getNombre()))
-                .collect(Collectors.toList());
+
+        // 7. Retornar la lista de alumnos con materias
+        return alumnDTOList;
     }
 
+
     @Override
-    public NoteRecord registrarNota(String legajo, String materia, int calificacion) {
+    public NoteRecordDTO registrarNota(String legajo, String materia, int calificacion) {
         Optional<AlumnEntity> optionalAlumnEntity = alumnRepository.findByLegajo(legajo);
 
         if (optionalAlumnEntity.isPresent()) {
@@ -126,7 +136,7 @@ public class GestionServiceImpl implements GestionService {
                     }
 
                     subjectRepository.save(subject); // Guarda la materia actualizada
-                    return new NoteRecord(legajo, materia, calificacion); // Retorna el registro de la nota
+                    return new NoteRecordDTO(legajo, materia, calificacion); // Retorna el registro de la nota
                 }
             }
 
@@ -142,6 +152,38 @@ public class GestionServiceImpl implements GestionService {
         return null; // Opcional, ya que no debería llegar aquí
     }
 
+    @Override
+    public List<EstadisticNotesDTO> estadisticReport(String materia) {
+
+        List<SubjectEntity> subjectList = subjectRepository.findByMateria(materia);
+
+        Map<String, List<SubjectEntity>> subjectGrouped = subjectList.stream()
+                .collect(Collectors.groupingBy(sub -> sub.getMateria().toLowerCase()));
+
+        return subjectGrouped.entrySet().stream().map(entry ->{
+            String subjectEntry = entry.getKey();
+            List<SubjectEntity> subjectEntities = entry.getValue();
+
+            long libres = subjectEntities.stream().filter(sub -> sub.getEstado().equals("Libre")).count();
+            long regulares = subjectEntities.stream().filter(sub -> sub.getEstado().equals("Regular")).count();
+            long promocionados = subjectEntities.stream().filter(sub -> sub.getEstado().equals("Promocionado")).count();
+            long total = subjectEntities.size();
+
+
+            String porcentajeLibre = String.format("%.2f%%", (libres * 100.0) / total);
+            String porcentajeRegular = String.format("%.2f%%", (regulares * 100.0) / total);
+            String porcentajePromocionado = String.format("%.2f%%", (promocionados * 100.0) / total);
+
+            String resultado = (regulares + promocionados) > (0.6 * total) ? "Exitoso" : "Fracaso";
+
+            EstadoDTO estado = new EstadoDTO(porcentajeLibre,porcentajeRegular,porcentajePromocionado);
+
+            return new EstadisticNotesDTO(subjectEntry,estado,resultado);
+
+        }).collect(Collectors.toList());
+
+
+    }
 
 
 }

@@ -1,7 +1,8 @@
 package ar.edu.utn.frc.tup.services;
 
 import ar.edu.utn.frc.tup.DTO.AlumnDTO;
-import ar.edu.utn.frc.tup.DTO.NoteRecord;
+import ar.edu.utn.frc.tup.DTO.EstadisticNotesDTO;
+import ar.edu.utn.frc.tup.DTO.NoteRecordDTO;
 import ar.edu.utn.frc.tup.DTO.TeacherDTO;
 import org.springframework.stereotype.Service;
 
@@ -15,7 +16,7 @@ List<TeacherDTO> getTeacherBD();
 
 
 List<AlumnDTO> registrarBD();
-NoteRecord registrarNota(String legajo, String materia, int calificacion);
-
+NoteRecordDTO registrarNota(String legajo, String materia, int calificacion);
+List<EstadisticNotesDTO> estadisticReport(String materia);
 
 }

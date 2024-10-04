@@ -1,0 +1,24 @@
+services:
+  gestion:
+    container_name: gestion-service-app
+    image: gestion-app:1.0.0
+    build: .
+    ports:
+      - "8081:8081"
+    environment:
+      - API_URL=http://api_externa:8080
+    depends_on:
+      - api_externa
+    networks:
+      - red_gestion
+
+  api_externa:
+    image: gabrielarriola/api-examen
+    ports:
+      - "8080:8080"
+    networks:
+      - red_gestion
+
+networks:
+  red_gestion:
+
